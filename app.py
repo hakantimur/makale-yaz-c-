@@ -410,6 +410,38 @@ if st.session_state["article_markdown"]:
         for w in st.session_state["media_enrich_warnings"]:
             st.warning(w)
 
+    st.subheader("Export")
+    st.caption("SEO/LLM denetimi çalıştırmadan da makaleyi kopyalayabilir veya indirebilirsin.")
+    if st.button("SAVE / DOWNLOAD MARKDOWN"):
+        base_name = safe_filename(focus_keyword or topic)
+        path = save_markdown(st.session_state["article_markdown"], base_name)
+        st.session_state["saved_path"] = path
+        st.success(f"Saved to {path}")
+
+    st.download_button(
+        "Download Markdown",
+        data=st.session_state["article_markdown"],
+        file_name=f"{safe_filename(focus_keyword or topic)}.md",
+        mime="text/markdown",
+    )
+
+    st.markdown("**Wagtail için HTML**")
+    st.caption(
+        "Markdown'ı (tablo, başlık, kalın yazı dahil) doğrudan Wagtail'in RawHTMLBlock'una "
+        "yapıştırılabilecek gerçek HTML'e çevirir — düz RichText alanına değil, RawHTMLBlock'a "
+        "yapıştır, aksi halde CTA/kutu/grafik stilleri kaybolur."
+    )
+    export_article_only = extract_section(st.session_state["article_markdown"], "Article")
+    export_article_html = convert_article_to_html(export_article_only)
+    with st.expander("Kopyala: HTML çıktısı", expanded=False):
+        st.code(export_article_html, language="html")
+    st.download_button(
+        "Download HTML",
+        data=export_article_html,
+        file_name=f"{safe_filename(focus_keyword or topic)}.html",
+        mime="text/html",
+    )
+
     if st.button("RUN SEO + LLM AUDIT", disabled=not can_run):
         try:
             report = run_python_seo_checks(st.session_state["article_markdown"], focus_keyword, word_count)
@@ -488,33 +520,4 @@ if st.session_state["seo_report"]:
                 st.caption(f"Maximum automatic regenerate ({MAX_AUTO_REGENERATE}) reached.")
 
         with col_c:
-            if status == "PASS" or not report["hard_fails"]:
-                if st.button("SAVE / DOWNLOAD MARKDOWN"):
-                    base_name = safe_filename(focus_keyword or topic)
-                    path = save_markdown(st.session_state["article_markdown"], base_name)
-                    st.session_state["saved_path"] = path
-                    st.success(f"Saved to {path}")
-
-        st.download_button(
-            "Download Markdown",
-            data=st.session_state["article_markdown"],
-            file_name=f"{safe_filename(focus_keyword or topic)}.md",
-            mime="text/markdown",
-        )
-
-        st.subheader("Wagtail için HTML")
-        st.caption(
-            "Markdown'ı (tablo, başlık, kalın yazı dahil) doğrudan Wagtail'in RawHTMLBlock'una "
-            "yapıştırılabilecek gerçek HTML'e çevirir — düz RichText alanına değil, RawHTMLBlock'a "
-            "yapıştır, aksi halde CTA/kutu/grafik stilleri kaybolur."
-        )
-        article_only = extract_section(st.session_state["article_markdown"], "Article")
-        article_html = convert_article_to_html(article_only)
-        with st.expander("Kopyala: HTML çıktısı", expanded=False):
-            st.code(article_html, language="html")
-        st.download_button(
-            "Download HTML",
-            data=article_html,
-            file_name=f"{safe_filename(focus_keyword or topic)}.html",
-            mime="text/html",
-        )
+            st.caption("Export seçenekleri artık makale önizlemesinin hemen altında, denetimden bağımsız.")

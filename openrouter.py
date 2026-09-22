@@ -231,8 +231,18 @@ def generate_image(
             f"{base_url}/images/generations", headers=_headers(api_key), json=payload, timeout=timeout
         )
         resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        # Surface OpenRouter's actual error body (rate limit, missing credits, model-specific
+        # param rejection, content-policy block, etc.) instead of a generic message — otherwise
+        # every distinct failure looks identical in the UI and can't be diagnosed.
+        try:
+            detail = exc.response.json().get("error", {}).get("message", "")
+        except (json.JSONDecodeError, AttributeError):
+            detail = exc.response.text[:300] if exc.response is not None else ""
+        status = exc.response.status_code if exc.response is not None else "?"
+        raise OpenRouterError(f"Image generation request failed ({status}): {detail or 'no detail'}") from exc
     except httpx.HTTPError as exc:
-        raise OpenRouterError("Image generation request failed.") from exc
+        raise OpenRouterError(f"Image generation request failed: {exc}") from exc
 
     try:
         data = resp.json()
