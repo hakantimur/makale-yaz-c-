@@ -77,11 +77,15 @@ def init_state():
 
 def format_model_label(model: dict) -> str:
     model_id = model.get("id", "unknown")
+    name = model.get("name", "")
     pricing = model.get("pricing", {})
     context_length = model.get("context_length", "?")
     prompt_price = pricing.get("prompt", "?")
     completion_price = pricing.get("completion", "?")
-    return f"{model_id}  |  ctx: {context_length}  |  in: {prompt_price}  out: {completion_price}"
+    # OpenRouter often carries a marketing nickname (e.g. "Nano Banana") only in `name`,
+    # not in `id` — include it so searching the dropdown by that nickname actually works.
+    name_part = f"  ({name})" if name and name.lower() not in model_id.lower() else ""
+    return f"{model_id}{name_part}  |  ctx: {context_length}  |  in: {prompt_price}  out: {completion_price}"
 
 
 def get_model_pricing(models: list, model_id: str) -> dict:
