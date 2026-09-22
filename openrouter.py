@@ -10,6 +10,7 @@ from prompts import (
     REVISION_PROMPT_TEMPLATE,
     WRITER_SYSTEM_PROMPT,
 )
+from config import NORITALES_HOMEPAGE_URL
 from utils import enforce_assignment_fields
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
@@ -129,7 +130,8 @@ def build_article_prompt(
         f"Immutable Focus Keyword: {focus_keyword}\n"
         f"Language: {language}\n"
         f"Target Word Count: {word_count}\n"
-        f"Target Market: {target_market or 'Not specified'}\n\n"
+        f"Target Market: {target_market or 'Not specified'}\n"
+        f"Noritales Homepage URL: {NORITALES_HOMEPAGE_URL}\n\n"
         f"RESEARCH PACK:\n{research_pack}\n\nUSER ANSWERS:\n{user_answers}\n"
     )
     messages = [
@@ -148,6 +150,7 @@ def build_article_prompt(
             "Language": language,
             "Target Market": target_market or "Not specified",
             "Target Word Count": str(word_count),
+            "Noritales Homepage URL": NORITALES_HOMEPAGE_URL,
         },
     )
     return result

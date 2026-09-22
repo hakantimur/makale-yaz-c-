@@ -2,10 +2,13 @@ import re
 
 import httpx
 
+from config import NORITALES_HOMEPAGE_URL
 from utils import extract_section, parse_metadata_field, slugify_focus_keyword
 
 SENTENCE_SPLIT_RE = re.compile(r"[.!?]+(?:\s+|$)")
-URL_RE = re.compile(r"https?://[^\s)>\]]+")
+URL_RE = re.compile(r"https?://[^\s)>\]\"'<]+")
+MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
+INLINE_PERCENT_STAT_RE = re.compile(r"(\d+([.,]\d+)?\s?%)|(%\s?\d+([.,]\d+)?)")
 
 
 def _clean_text(text: str) -> str:
@@ -154,6 +157,43 @@ def verify_urls_reachable(urls: list, timeout: float = 8.0) -> dict:
     return results
 
 
+def count_inline_body_links(article_section: str) -> int:
+    """Markdown inline links `[anchor](url)` actually embedded in the article prose,
+    as opposed to a bare list of URLs bolted onto the end."""
+    return len(MARKDOWN_LINK_RE.findall(article_section))
+
+
+def find_cta_positions(article_section: str, homepage_url: str = NORITALES_HOMEPAGE_URL) -> list:
+    """Relative (0.0-1.0) character positions of every link/CTA pointing at the Noritales
+    homepage, so we can check it's spread across intro/middle/end, not clustered in one spot."""
+    length = len(article_section) or 1
+    positions = []
+    for match in re.finditer(re.escape(homepage_url), article_section):
+        positions.append(match.start() / length)
+    return positions
+
+
+def check_cta_distribution(article_section: str, homepage_url: str = NORITALES_HOMEPAGE_URL) -> dict:
+    positions = find_cta_positions(article_section, homepage_url)
+    has_intro = any(p <= 0.4 for p in positions)
+    has_middle = any(0.25 < p < 0.75 for p in positions)
+    has_end = any(p >= 0.6 for p in positions)
+    return {
+        "cta_count": len(positions),
+        "cta_positions": [round(p, 2) for p in positions],
+        "has_intro_cta": has_intro,
+        "has_middle_cta": has_middle,
+        "has_end_cta": has_end,
+        "well_distributed": len(positions) >= 3 and has_intro and has_middle and has_end,
+    }
+
+
+def has_inline_statistic(article_section: str) -> bool:
+    """Best-effort proxy: does the article body contain at least one number-based
+    statistic (e.g. '35%'), as opposed to only listing stats in the appendix?"""
+    return bool(INLINE_PERCENT_STAT_RE.search(article_section))
+
+
 def run_python_seo_checks(full_markdown: str, focus_keyword: str, target_word_count: int) -> dict:
     """Deterministic checks per SPEC section 47-49. Runs on the Writer's full markdown output."""
     metadata_section = extract_section(full_markdown, "SEO Metadata")
@@ -212,6 +252,9 @@ def run_python_seo_checks(full_markdown: str, focus_keyword: str, target_word_co
         "url_check": url_check,
         "unreachable_urls": unreachable_urls,
         "blocked_urls": blocked_urls,
+        "inline_body_link_count": count_inline_body_links(article_section),
+        "cta_distribution": check_cta_distribution(article_section),
+        "has_inline_statistic": has_inline_statistic(article_section),
     }
 
     hard_fails = []
@@ -223,6 +266,18 @@ def run_python_seo_checks(full_markdown: str, focus_keyword: str, target_word_co
             f"URL(s) returned a bot-protection status (401/403/406/429) and could not be "
             f"auto-verified, but were not treated as fake: {', '.join(blocked_urls)}"
         )
+    if report["inline_body_link_count"] == 0 and (report["internal_link_count"] or report["external_link_count"]):
+        warnings.append(
+            "Links exist only in the appendix (Internal Links / External Sources Used) — "
+            "none are embedded as inline links inside the article body."
+        )
+    if not report["cta_distribution"]["well_distributed"]:
+        warnings.append(
+            "Noritales CTA is missing or not spread across intro/middle/end of the article "
+            f"(found {report['cta_distribution']['cta_count']} CTA link(s))."
+        )
+    if not report["has_inline_statistic"]:
+        warnings.append("No inline number-based statistic (e.g. 'X%') detected in the article body.")
     if not report["keyword_in_h1"] or not report["keyword_in_seo_title"] or not report["keyword_in_slug"]:
         hard_fails.append("Focus keyword missing from a critical location (title/H1/slug).")
     if report["keyword_density_percent"] == 0.0:

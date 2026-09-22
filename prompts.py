@@ -130,6 +130,7 @@ Your only job is to merge them into a single, complete, article-specific assignm
 RULES
 
 - The Immutable Focus Keyword must be copied exactly as given, unchanged, in the exact word order.
+- The Noritales Homepage URL is a fixed fact given to you by the application — copy it exactly, never invent a different one.
 - Never invent statistics, sources, quotes, or URLs beyond what the Research Pack already contains.
 - Reflect the user's answers faithfully; if an answer conflicts with the research, prefer the user's explicit instruction and note the tradeoff in "Special Instructions".
 - If the research pack lacks something needed for a field (e.g. no usable table data), write "None available" rather than inventing content.
@@ -153,6 +154,9 @@ Target Market:
 ...
 
 Target Word Count:
+...
+
+Noritales Homepage URL:
 ...
 
 Search Intent:
@@ -266,7 +270,7 @@ Never keyword-stuff. Distribute the keyword across the article, not just in the 
 
 SEO Title: ~50-60 characters, exact focus keyword near the start where natural, not clickbait, must accurately describe the article.
 
-Exactly one H1, containing the exact focus keyword.
+The article body's very first line must be a single H1: exactly one leading `#` character (never `##` or `###`) followed by a heading containing the exact focus keyword. This is the single most violated rule in past output — double-check the first line of your article body starts with `# ` and not `## `.
 At least one appropriate H2 containing the exact focus keyword.
 Other H2/H3s should semantically expand the topic — do not force the keyword into every heading.
 Avoid unheaded blocks of text longer than ~250-300 words.
@@ -287,7 +291,7 @@ Prefer paragraphs of 2-4 sentences, 40-100 words. A paragraph over 150 words is 
 
 The goal is not to fool an AI detector — the goal is genuinely good editorial writing.
 
-Do not repeat the same sentence pattern, use the same template under every H2, produce endless three-bullet lists, or summarize the same point repeatedly. Use concrete examples and natural parent-facing language. Never fabricate personal experience. No filler.
+Do not repeat the same sentence pattern, use the same template under every H2, produce endless three-bullet lists, or summarize the same point repeatedly. Do not open consecutive paragraphs with the same construction (e.g. always restating the focus keyword phrase as the first words) — vary how each paragraph enters its idea, and connect paragraphs causally ("bu yüzden", "bunun sonucunda", "ancak") rather than stacking disconnected facts. Use concrete examples and natural parent-facing language. Never fabricate personal experience. No filler.
 
 Avoid AI clichés: "In today's fast-paced world", "In today's digital age", "It is important to note", "This comprehensive guide", "Let's dive in", "Delve into", "Unlock the power", "Game-changer", "Whether you're...", "In conclusion".
 
@@ -297,15 +301,19 @@ The article must fully satisfy the real search intent of the focus keyword — a
 
 Write so both Google Search and answer engines (ChatGPT, Gemini, etc.) can use it: clear definitions, direct answers, descriptive headings, self-contained paragraphs, evidence-backed facts, comparisons, tables, age-based explanations, original Noritales frameworks, and clear answers to important questions. Do not chop the article into meaningless fragments just to please an AI.
 
-=== STATISTICS, QUOTES, TABLE, CHART ===
+=== STATISTICS MUST LIVE INSIDE THE ARTICLE, NOT ONLY IN AN APPENDIX ===
 
-Use 2-4 verified statistics/interesting data points where possible, each with Source Name and Live URL, taken only from the assignment's Verified Facts/Statistics — never invented.
+Use 2-4 verified statistics/interesting data points, each taken only from the assignment's Verified Facts/Statistics — never invented.
 
-A short, strong quote may be used if it fits; it must be real, short, sourced (Source Name + Live URL), and already verified in the assignment. Never invent your own quote.
+Every statistic must appear as a real sentence woven into the paragraph where it is relevant, written the way a good editor would state it (e.g. "children who regularly hear pedagogically designed stories show a 35% lower rate of aggressive conflict resolution, according to [Source Name](live-url)"). A statistic that exists only in the closing "Statistics Used" appendix and never in the body text is a failure to follow this instruction — the appendix is a cross-reference of what is already in the body, not a place to relegate facts you didn't work into the writing.
 
-Include at least one table if it adds real value (never force a meaningless table just for an SEO checkbox).
+A short, strong quote may be used the same way — inline, in context, sourced with an inline link — if it fits; it must be real and already verified in the assignment. Never invent your own quote.
 
-If the assignment provides real chartable data, produce a CHART RECOMMENDATION block:
+=== TABLES, CHARTS AND IMAGES MUST SIT WHERE THEY ARE RELEVANT ===
+
+Include at least one table if it adds real value, placed directly inside the H2/H3 section it supports (never force a meaningless table just for an SEO checkbox, and never dump it at the end of the article disconnected from the text that discusses it).
+
+If the assignment provides real chartable data, place a CHART RECOMMENDATION block immediately after the paragraph that discusses that data (not in a separate end-of-article section):
 CHART RECOMMENDATION
 Chart Type:
 Title:
@@ -316,15 +324,32 @@ Source:
 Live URL:
 Never invent chart data. An original conceptual diagram (not data-based) may be proposed if relevant.
 
-=== IMAGES ===
+For images: place the in-article image suggestion directly under the section heading it illustrates, not only in a trailing "Image Recommendations" block. Every article still needs one Featured Image Concept + Filename + Alt Text near the top. Alt text must genuinely describe the image — no keyword stuffing.
 
-For every article, provide a Featured Image Concept, Filename, and Alt Text. Add in-article image suggestions (Section, Concept, Filename, Alt text) if useful. Alt text must genuinely describe the image — no keyword stuffing.
+=== LINKS MUST BE EMBEDDED IN THE SENTENCE, NEVER JUST LISTED ===
 
-=== LINKS ===
+Internal and external links are never a bare list bolted onto the end of the article. Every link is a markdown inline link `[anchor text](url)` embedded inside a natural sentence, at the exact point in the article where that source or that Noritales connection is relevant. For example: "Bu tür masallar için [Noritales](https://noritales.com)'i ziyaret edebilirsiniz." or "Bu konudaki araştırmaya göre [aile içi etkileşim çocuğun empati gelişimini güçlendirir](https://example.com/study)." Anchor text must be descriptive and grammatically part of the sentence — never "click here", "read more", "this page", and never a raw bare URL sitting alone in the paragraph.
 
-Aim for 2-5 relevant internal links using real Noritales URLs provided in the assignment; if none exist, write "Suggested future internal page: ..." instead of inventing a URL. Anchor text must be descriptive — never "click here", "read more", "this page".
+Aim for 2-5 relevant internal links using real Noritales URLs provided in the assignment; if none exist beyond the homepage, use the Noritales Homepage URL and write "Suggested future internal page: ..." in the appendix for anything you could not link for real.
 
-Aim for 1-4 high-quality external sources from the assignment's Verified Sources; the exact count is not a rigid rule, quality matters most.
+Aim for 1-4 high-quality external sources from the assignment's Verified Sources, each embedded inline exactly as described above; the exact count is not a rigid rule, quality matters most.
+
+=== NORITALES CTA — MANDATORY, THREE TIMES, NEVER A LINK DUMP ===
+
+The assignment gives you a fixed "Noritales Homepage URL" — use it exactly, never invent a different one.
+
+The article must contain at least three calls to action pointing to that URL, spaced far apart — each one separated from the others by several full paragraphs, never two CTAs in the same section or within a few sentences of each other:
+1. One near the end of the opening section, roughly in the first 20% of the article (after the hook, once the topic is framed).
+2. One around the article's midpoint, roughly between 40% and 60% of the way through — not near the end, not near the beginning.
+3. One in the closing section, in the final 20% of the article, as part of the final takeaway.
+
+Each CTA must be phrased as a genuine, topic-specific sentence — never the same boilerplate line repeated three times — and must render as a clearly distinct, clickable call-to-action using this exact inline HTML pattern (markdown renderers pass raw HTML through, and this is what lets the publishing site style it as a button). Replace the href with the exact "Noritales Homepage URL" value from the assignment, and write a short action-oriented label:
+
+<a href="PUT_THE_NORITALES_HOMEPAGE_URL_FROM_THE_ASSIGNMENT_HERE" class="noritales-cta-button">short action-oriented label</a>
+
+Example (if the assignment's Noritales Homepage URL is https://noritales.com): <a href="https://noritales.com" class="noritales-cta-button">Noritales'te Kişiselleştirilmiş Masallar Oluşturun</a>
+
+Never present Noritales merely as "an AI story generator" inside a CTA — the CTA label and surrounding sentence must reflect the personalized/pedagogical/developmental storytelling positioning from the BRAND section above.
 
 === METADATA ===
 
@@ -343,6 +368,8 @@ Schema Recommendation: suggest only (e.g. BlogPosting, Article, BreadcrumbList) 
 You may never invent: statistics, research/studies, DOI, PMID, experts, quotes, URLs, Noritales product features, customer counts, success rates, clinical outcomes, awards, reviews, or ratings. For factual content, use only what the assignment's Verified Facts/Statistics/Sources provide.
 
 === OUTPUT FORMAT ===
+
+The "Internal Links", "External Sources Used", and "Statistics Used" sections below are a structured cross-reference for the application's automated checks — every entry in them must already exist as an inline embedded link or in-text statistic somewhere in the "# Article" body. They are never the only place that content appears.
 
 Produce exactly this structure:
 
@@ -448,6 +475,15 @@ Determine whether the reader's actual question is answered quickly and completel
 LLM / ANSWER-ENGINE READINESS
 
 Check whether the article contains: direct answers; clear definitions; self-contained useful paragraphs; evidence-backed facts; meaningful tables; clear headings; useful comparisons; quotable factual statements; unique Noritales expertise.
+
+INLINE INTEGRATION (this is a recurring failure mode — check it explicitly)
+
+- Links must be embedded inline inside sentences (`[anchor](url)` used naturally in prose), never just dumped as a bare list at the end of the article. If the appendix lists links that never appear inline in the body, flag it.
+- At least one real number-based statistic (e.g. "35%") must appear inside the flowing text, not only in the "Statistics Used" appendix.
+- The Noritales CTA (`<a ... class="noritales-cta-button">`) must appear at least 3 times, spread across the beginning, middle, and end of the article — not clustered together, not missing, not just a plain link.
+- Tables, charts and images should sit next to the section they illustrate, not be dumped in a disconnected block at the end.
+
+Use the Python metrics' `inline_body_link_count`, `cta_distribution`, and `has_inline_statistic` fields as ground truth for this check.
 
 EVIDENCE
 

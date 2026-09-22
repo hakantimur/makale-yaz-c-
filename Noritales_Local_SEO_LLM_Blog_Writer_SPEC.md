@@ -1896,6 +1896,30 @@ DOWNLOAD .MD
 
 ---
 
+# 69b. Gerçek Kullanım Geri Bildirimi Sonrası Düzeltmeler
+
+İlk gerçek makale denemesinde şu sorunlar tespit edildi ve düzeltildi:
+
+1. **Linkler gömülü değildi.** Internal/external linkler makale sonunda ayrı bir liste halindeydi. Artık Writer, her linki cümle içine gömülü markdown linki (`[anchor](url)`) olarak yazmak zorunda; "Internal Links" / "External Sources Used" ek bölümleri artık yalnızca gövdede zaten var olan linklerin çapraz-referansı.
+2. **CTA yoktu.** `config.py` içinde sabit `NORITALES_HOMEPAGE_URL` tanımlandı. Bu URL, Article Prompt Builder çıktısına "Noritales Homepage URL" alanı olarak Python tarafından zorla yazılıyor (modele güvenilmiyor — tıpkı focus keyword ve kelime sayısı gibi). Writer, makalenin başında (~ilk %20), ortasında (~%40-60) ve sonunda (~son %20) olmak üzere en az 3 tıklanabilir CTA üretmek zorunda:
+   ```html
+   <a href="https://noritales.com" class="noritales-cta-button">...</a>
+   ```
+   Bu HTML markdown içine gömülü kalır; gerçek "buton" görünümü yayınlayıcı sitenin CSS'i (`.noritales-cta-button` sınıfı) ile sağlanır.
+3. **İstatistik yoktu.** Writer artık istatistikleri sadece "Statistics Used" ek bölümüne değil, makale gövdesindeki ilgili paragrafa gömülü cümle olarak yazmak zorunda (örn. "...%35 daha düşük...").
+4. **Tablo/grafik/görsel gövdeden kopuktu.** Bunlar artık ilgili H2/H3 bölümünün hemen altında, makale sonundaki ek bölümlerde değil.
+
+**Python QA'ya eklenen yeni kontroller** ([seo_checks.py](seo_checks.py)):
+- `count_inline_body_links()` — gövdede gerçekten gömülü link var mı.
+- `check_cta_distribution()` — Noritales CTA'sı kaç kez geçiyor, giriş/orta/son'a yayılmış mı.
+- `has_inline_statistic()` — gövdede sayısal bir istatistik (`%35` veya `35%`, her iki yazım da) var mı.
+
+Bunlar hard-fail değil, warning olarak raporlanır (Evaluator'a da bağlam olarak veriliyor); tekrarlayan ihlal halinde Evaluator'ın REVISE/REGENERATE kararına yansır.
+
+Ayrıca URL regex'inde bir bug bulunup düzeltildi: `<a href="...">` gibi HTML özniteliklerindeki tırnak işareti, ardışık iki URL'nin tek (bozuk) bir URL olarak birleşip yanlışlıkla "fake URL" sayılmasına yol açıyordu.
+
+---
+
 # 70. Projenin Ana Kuralı
 
 Bu uygulamanın amacı:
