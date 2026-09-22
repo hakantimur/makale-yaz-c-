@@ -6,7 +6,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 import openrouter
-from charts import render_charts_in_article
+from charts import find_chart_blocks, render_charts_in_article
 from html_export import convert_article_to_html, sanitize_html
 from media import image_bytes_to_data_uri, save_image_bytes
 from openrouter import OpenRouterError
@@ -70,6 +70,8 @@ def init_state():
         "models": None,
         "image_models": None,
         "media_enriched": False,
+        "media_enrich_warnings": [],
+        "media_enrich_counts": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -121,10 +123,26 @@ def show_usage(label: str, usage: dict, pricing: dict):
 def enrich_article_with_media(article_markdown: str, api_key: str, image_model: str, slug: str) -> tuple:
     """Generates 1-2 real images and renders any CHART RECOMMENDATION blocks into real
     charts, embedding both inline. Never blocks article completion — a failed image or
-    chart is skipped with a warning, never an exception the caller has to handle."""
+    chart is skipped with a warning, never an exception the caller has to handle.
+    Returns (new_markdown, warnings, images_added, charts_added) — the caller must not
+    report success without checking the counts, since a Writer output that doesn't match
+    the expected 'Image Recommendations' / 'CHART RECOMMENDATION' format silently yields
+    zero of either with no exception raised."""
     warnings = []
     article_section = extract_section(article_markdown, "Article")
+    if not article_section:
+        warnings.append(
+            "'# Article' bölümü bulunamadı — makale metni beklenen formatta değil, "
+            "görsel/grafik eklenemedi."
+        )
+        return article_markdown, warnings, 0, 0
+
     image_section = extract_section(article_markdown, "Image Recommendations")
+    if not image_section:
+        warnings.append(
+            "'# Image Recommendations' bölümü bulunamadı (Writer çıktısı beklenen başlığı "
+            "kullanmamış olabilir) — görsel eklenemedi."
+        )
     images_info = parse_image_recommendations(image_section)
 
     image_requests = []
@@ -134,6 +152,13 @@ def enrich_article_with_media(article_markdown: str, api_key: str, image_model: 
         image_requests.append(("in_article", images_info["in_article"][0]))
     image_requests = image_requests[:2]
 
+    if image_section and not image_requests:
+        warnings.append(
+            "'# Image Recommendations' bölümü bulundu ama 'Concept:' alanları boş/parse "
+            "edilemedi — görsel eklenemedi."
+        )
+
+    images_added = 0
     new_article_section = article_section
     for kind, info in image_requests:
         concept = info.get("Concept", "")
@@ -169,17 +194,29 @@ def enrich_article_with_media(article_markdown: str, api_key: str, image_model: 
                 if section_name and section_name in new_article_section:
                     new_article_section = new_article_section.replace(section_name, section_name + image_html, 1)
                 else:
+                    if section_name:
+                        warnings.append(
+                            f"In-article görsel: 'Section: {section_name}' makale metninde bulunamadı, "
+                            "görsel makalenin sonuna eklendi."
+                        )
                     new_article_section += image_html
+            images_added += 1
         except OpenRouterError as exc:
             warnings.append(f"Görsel oluşturulamadı ({kind}): {exc}")
         except Exception as exc:  # noqa: BLE001 - image generation must never block the article
             warnings.append(f"Görsel oluşturulurken beklenmeyen hata ({kind}): {exc}")
 
+    if not find_chart_blocks(new_article_section):
+        warnings.append(
+            "Makale metninde 'CHART RECOMMENDATION' bloğu bulunamadı (Writer bu makale için "
+            "grafik önermemiş olabilir) — grafik eklenmedi."
+        )
     new_article_section, chart_warnings = render_charts_in_article(new_article_section, slug)
+    charts_added = new_article_section.count('class="noritales-chart"')
     warnings.extend(chart_warnings)
 
     new_full_markdown = article_markdown.replace(article_section, new_article_section, 1)
-    return new_full_markdown, warnings
+    return new_full_markdown, warnings, images_added, charts_added
 
 
 def parse_evaluator_output(text: str) -> dict:
@@ -329,6 +366,8 @@ if st.session_state["article_prompt"]:
             st.session_state["evaluator_text"] = None
             st.session_state["regenerate_count"] = 0
             st.session_state["media_enriched"] = False
+            st.session_state["media_enrich_warnings"] = []
+            st.session_state["media_enrich_counts"] = None
         except OpenRouterError as exc:
             st.error(str(exc))
 
@@ -349,19 +388,27 @@ if st.session_state["article_markdown"]:
         if st.button("🎨 GÖRSEL VE GRAFİK EKLE", disabled=not can_run):
             try:
                 with st.spinner("Görseller ve grafikler oluşturuluyor..."):
-                    enriched, enrich_warnings = enrich_article_with_media(
+                    enriched, enrich_warnings, images_added, charts_added = enrich_article_with_media(
                         st.session_state["article_markdown"], api_key, image_model,
                         safe_filename(focus_keyword or topic),
                     )
                 st.session_state["article_markdown"] = enriched
                 st.session_state["media_enriched"] = True
-                for w in enrich_warnings:
-                    st.warning(w)
+                # Warnings must survive the rerun below — st.warning() calls made right
+                # before st.rerun() are wiped before the user ever sees them.
+                st.session_state["media_enrich_warnings"] = enrich_warnings
+                st.session_state["media_enrich_counts"] = (images_added, charts_added)
                 st.rerun()
             except Exception as exc:  # noqa: BLE001 - enrichment must never crash the app
                 st.warning(f"Görsel/grafik ekleme sırasında hata oluştu, makale metni etkilenmedi: {exc}")
     else:
-        st.caption("✅ Görsel ve grafikler eklendi.")
+        counts = st.session_state["media_enrich_counts"]
+        if counts and (counts[0] or counts[1]):
+            st.caption(f"✅ {counts[0]} görsel, {counts[1]} grafik eklendi.")
+        else:
+            st.caption("⚠️ İşlem tamamlandı ama hiç görsel/grafik eklenmedi — nedenini aşağıda görebilirsiniz.")
+        for w in st.session_state["media_enrich_warnings"]:
+            st.warning(w)
 
     if st.button("RUN SEO + LLM AUDIT", disabled=not can_run):
         try:
@@ -413,6 +460,8 @@ if st.session_state["seo_report"]:
                     st.session_state["seo_report"] = None
                     st.session_state["evaluator_text"] = None
                     st.session_state["media_enriched"] = False
+                    st.session_state["media_enrich_warnings"] = []
+                    st.session_state["media_enrich_counts"] = None
                     st.rerun()
                 except OpenRouterError as exc:
                     st.error(str(exc))
@@ -429,6 +478,8 @@ if st.session_state["seo_report"]:
                     st.session_state["seo_report"] = None
                     st.session_state["evaluator_text"] = None
                     st.session_state["media_enriched"] = False
+                    st.session_state["media_enrich_warnings"] = []
+                    st.session_state["media_enrich_counts"] = None
                     st.session_state["regenerate_count"] += 1
                     st.rerun()
                 except OpenRouterError as exc:
