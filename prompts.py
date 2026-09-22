@@ -521,6 +521,16 @@ Scoring guide: 90-100 = PASS, 80-89 = REVISE, 0-79 or any hard fail = REGENERATE
 """
 
 
+WRITE_ARTICLE_PROMPT_TEMPLATE = """Write the full Noritales blog article now, following every rule in your system instructions exactly. Use only the facts, statistics, quotes, sources and structure given in the ARTICLE ASSIGNMENT below — never invent anything beyond it.
+
+ARTICLE ASSIGNMENT:
+
+{assignment}
+
+Now produce the complete output, in the exact structure defined in your system prompt (SEO Metadata, Article, Internal Links, External Sources Used, Statistics Used, Table / Chart / Diagram Notes, Image Recommendations, Schema Recommendation), based on the assignment above.
+"""
+
+
 REVISION_PROMPT_TEMPLATE = """Revise the existing article below. Do not rewrite good sections.
 
 Fix only these issues:

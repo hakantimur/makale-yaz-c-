@@ -12,6 +12,7 @@ from prompts import (
     REGENERATION_PROMPT_TEMPLATE,
     RESEARCH_SYSTEM_PROMPT,
     REVISION_PROMPT_TEMPLATE,
+    WRITE_ARTICLE_PROMPT_TEMPLATE,
     WRITER_SYSTEM_PROMPT,
 )
 from config import NORITALES_HOMEPAGE_URL
@@ -175,10 +176,14 @@ def build_article_prompt(
 
 
 def write_article(api_key: str, model: str, article_specific_prompt: str) -> dict:
-    """REQUEST 3."""
+    """REQUEST 3. The assignment is a large data block (research facts, statistics, sources,
+    structure) with no task verb of its own — wrapping it in an explicit "write the article
+    now, using only this data, in this output format" directive (like the Revise/Regenerate
+    prompts already do) instead of sending the raw assignment as the entire user turn."""
+    user_message = WRITE_ARTICLE_PROMPT_TEMPLATE.format(assignment=article_specific_prompt)
     messages = [
         {"role": "system", "content": WRITER_SYSTEM_PROMPT},
-        {"role": "user", "content": article_specific_prompt},
+        {"role": "user", "content": user_message},
     ]
     return call_model(api_key, model, messages, web_search=False)
 
