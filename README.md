@@ -2,20 +2,24 @@
 
 Lokalde çalışan basit bir Streamlit aracı. Detaylı spesifikasyon: [Noritales_Local_SEO_LLM_Blog_Writer_SPEC.md](Noritales_Local_SEO_LLM_Blog_Writer_SPEC.md)
 
-## Kurulum
+## Çalıştırma (en kolay yol)
+
+`run.bat` dosyasına çift tıkla.
+
+İlk çalıştırmada otomatik olarak:
+- `.venv` sanal ortamı oluşturulur ve bağımlılıklar kurulur,
+- `.env` yoksa `.env.example`'dan oluşturulur,
+- Streamlit tarayıcıda açılır (`http://localhost:8501`).
+
+`OPENROUTER_API_KEY`'i `.env` dosyasına yazabilir veya uygulama açıldıktan sonra sol sidebar'dan girebilirsin.
+
+## Manuel kurulum (istersen)
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
-```
-
-`.env` içine `OPENROUTER_API_KEY` değerini yaz (veya uygulama açıldıktan sonra sidebar'dan gir).
-
-## Çalıştırma
-
-```bash
 streamlit run app.py
 ```
 
