@@ -4,11 +4,9 @@ cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (
     echo Sanal ortam olusturuluyor...
     python -m venv .venv
-    call .venv\Scripts\activate.bat
-    pip install -r requirements.txt
-) else (
-    call .venv\Scripts\activate.bat
 )
+call .venv\Scripts\activate.bat
+pip install -q -r requirements.txt
 
 if not exist ".env" (
     copy .env.example .env >nul
