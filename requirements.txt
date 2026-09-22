@@ -3,3 +3,4 @@ httpx
 python-dotenv
 matplotlib
 markdown
+bleach

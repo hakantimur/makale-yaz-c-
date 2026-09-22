@@ -1,6 +1,8 @@
 import base64
+import html
 import os
 import re
+from urllib.parse import urlparse
 
 import matplotlib
 
@@ -106,11 +108,15 @@ def render_charts_in_article(article_text: str, slug: str, output_dir: str = "ou
             with open(path, "rb") as f:
                 svg_bytes = f.read()
             data_uri = "data:image/svg+xml;base64," + base64.b64encode(svg_bytes).decode("ascii")
-            title = spec.get("Title", "")
-            source = spec.get("Source", "")
-            url = spec.get("Live URL", "")
-            if url:
-                caption_source = f' — Kaynak: <a href="{url}">{source or url}</a>'
+
+            # Title/Source/Live URL are LLM-derived text — never trust them as raw HTML.
+            title = html.escape(spec.get("Title", ""), quote=True)
+            source = html.escape(spec.get("Source", ""), quote=True)
+            raw_url = spec.get("Live URL", "")
+            safe_url = raw_url if urlparse(raw_url).scheme in ("http", "https") else ""
+            if safe_url:
+                escaped_url = html.escape(safe_url, quote=True)
+                caption_source = f' — Kaynak: <a href="{escaped_url}">{source or escaped_url}</a>'
             elif source:
                 caption_source = f" — Kaynak: {source}"
             else:

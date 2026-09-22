@@ -1,5 +1,8 @@
 import base64
+import ipaddress
 import json
+import socket
+from urllib.parse import urlparse
 
 import httpx
 
@@ -234,14 +237,71 @@ def generate_image(
             _, b64data = url.split(",", 1)
             return base64.b64decode(b64data)
         if url:
-            try:
-                img_resp = httpx.get(url, timeout=timeout)
-                img_resp.raise_for_status()
-            except httpx.HTTPError as exc:
-                raise OpenRouterError("Could not download the generated image.") from exc
-            return img_resp.content
+            return _fetch_remote_image_safely(url, timeout)
 
     raise OpenRouterError("Image model did not return an image.")
+
+
+MAX_REMOTE_IMAGE_BYTES = 15 * 1024 * 1024  # 15 MB
+
+
+def _is_public_url(url: str) -> bool:
+    """Blocks SSRF: only http(s) URLs that resolve to a public IP are allowed. An
+    image-generation model's response is not a trusted source — it could (via prompt
+    injection or a buggy/malicious provider) return a URL pointing at localhost, a
+    private network, or a cloud metadata endpoint (169.254.169.254)."""
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+    try:
+        addr_infos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        return False
+    for info in addr_infos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_unspecified
+            or ip.is_reserved
+        ):
+            return False
+    return True
+
+
+def _fetch_remote_image_safely(url: str, timeout: float) -> bytes:
+    if not _is_public_url(url):
+        raise OpenRouterError("Image URL failed safety validation (blocked internal/private address).")
+    try:
+        with httpx.stream("GET", url, timeout=timeout, follow_redirects=False) as resp:
+            if resp.is_redirect:
+                raise OpenRouterError("Image URL redirect was refused for safety.")
+            resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "")
+            if not content_type.startswith("image/"):
+                raise OpenRouterError("Image URL did not return an image content type.")
+            chunks = []
+            total = 0
+            for chunk in resp.iter_bytes():
+                total += len(chunk)
+                if total > MAX_REMOTE_IMAGE_BYTES:
+                    raise OpenRouterError("Generated image exceeded the maximum allowed size.")
+                chunks.append(chunk)
+            return b"".join(chunks)
+    except httpx.HTTPError as exc:
+        raise OpenRouterError("Could not download the generated image.") from exc
 
 
 def regenerate_article(api_key: str, model: str, original_article_prompt: str, evaluator_report: str) -> dict:

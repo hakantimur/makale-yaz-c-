@@ -1,3 +1,4 @@
+import html
 import os
 import re
 
@@ -6,7 +7,7 @@ from dotenv import load_dotenv
 
 import openrouter
 from charts import render_charts_in_article
-from html_export import convert_article_to_html
+from html_export import convert_article_to_html, sanitize_html
 from media import image_bytes_to_data_uri, save_image_bytes
 from openrouter import OpenRouterError
 from seo_checks import run_python_seo_checks
@@ -131,7 +132,7 @@ def enrich_article_with_media(article_markdown: str, api_key: str, image_model: 
     new_article_section = article_section
     for kind, info in image_requests:
         concept = info.get("Concept", "")
-        alt_text = info.get("Alt text") or concept
+        alt_text = html.escape(info.get("Alt text") or concept, quote=True)
         try:
             image_prompt = (
                 f"Warm, friendly flat-illustration style image for a parenting/child-development "
@@ -318,7 +319,10 @@ if st.session_state["article_markdown"]:
     st.header("4. Article")
     show_usage("Writer", st.session_state["article_usage"], get_model_pricing(models, writer_model))
     with st.expander("View Article", expanded=True):
-        st.markdown(st.session_state["article_markdown"], unsafe_allow_html=True)
+        # Research pulls in live web content, and the Writer can quote it — sanitize any
+        # embedded HTML before rendering it raw, in case adversarial page content made it
+        # through as a "quote" (prompt-injection / stored-XSS defense).
+        st.markdown(sanitize_html(st.session_state["article_markdown"]), unsafe_allow_html=True)
 
     if not st.session_state["media_enriched"]:
         st.caption(
