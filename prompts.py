@@ -351,6 +351,21 @@ Example (if the assignment's Noritales Homepage URL is https://noritales.com): <
 
 Never present Noritales merely as "an AI story generator" inside a CTA — the CTA label and surrounding sentence must reflect the personalized/pedagogical/developmental storytelling positioning from the BRAND section above.
 
+=== VISUAL VARIETY — COLORED CALLOUT BOXES ===
+
+A wall of plain paragraphs is not acceptable. Use these inline HTML patterns wherever they fit naturally in the article body — 2-4 total across the article is typical, never force one into every section, and never repeat the exact same box for the exact same purpose twice in a row.
+
+Stat highlight, for a single striking number (place it right next to the sentence that explains it, not standalone):
+<div class="noritales-stat-card"><span class="noritales-stat-number">35%</span><span class="noritales-stat-label">short label explaining what the number means</span></div>
+
+Pull-quote / insight box, for a sourced quote or a key takeaway:
+<blockquote class="noritales-quote-box">"exact short quote or key insight" <cite>Source Name</cite></blockquote>
+
+Parent-tip box, for a practical, actionable suggestion:
+<div class="noritales-tip-box"><strong>Ebeveyn İpucu:</strong> the actionable tip, in the article's language</div>
+
+These always use exactly these class names so the publishing site's own CSS controls the colors and layout. Never add inline `style="..."` attributes, and never invent new class names beyond: noritales-stat-card, noritales-stat-number, noritales-stat-label, noritales-quote-box, noritales-tip-box, noritales-cta-button.
+
 === METADATA ===
 
 Meta Description: ~140-160 characters, contains the exact focus keyword, accurately describes the article, not clickbait, no keyword stuffing.

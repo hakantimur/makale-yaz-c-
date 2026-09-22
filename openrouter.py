@@ -1,3 +1,4 @@
+import base64
 import json
 
 import httpx
@@ -11,7 +12,7 @@ from prompts import (
     WRITER_SYSTEM_PROMPT,
 )
 from config import NORITALES_HOMEPAGE_URL
-from utils import enforce_assignment_fields
+from utils import enforce_assignment_fields, strip_embedded_media_for_llm
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -167,6 +168,7 @@ def write_article(api_key: str, model: str, article_specific_prompt: str) -> dic
 
 def evaluate_article(api_key: str, model: str, article_markdown: str, python_metrics: dict) -> dict:
     """REQUEST 4."""
+    article_markdown = strip_embedded_media_for_llm(article_markdown)
     user_message = (
         f"ARTICLE:\n{article_markdown}\n\n"
         f"DETERMINISTIC PYTHON METRICS (treat as facts):\n{json.dumps(python_metrics, indent=2)}\n"
@@ -179,6 +181,7 @@ def evaluate_article(api_key: str, model: str, article_markdown: str, python_met
 
 
 def revise_article(api_key: str, model: str, article_markdown: str, issues: list) -> dict:
+    article_markdown = strip_embedded_media_for_llm(article_markdown)
     issues_text = "\n".join(f"- {issue}" for issue in issues) or "- General quality improvements."
     user_message = REVISION_PROMPT_TEMPLATE.format(article=article_markdown, issues=issues_text)
     messages = [
@@ -186,6 +189,59 @@ def revise_article(api_key: str, model: str, article_markdown: str, issues: list
         {"role": "user", "content": user_message},
     ]
     return call_model(api_key, model, messages, web_search=False)
+
+
+def generate_image(
+    api_key: str,
+    model: str,
+    prompt: str,
+    base_url: str = DEFAULT_BASE_URL,
+    timeout: float = 120.0,
+) -> bytes:
+    """Calls an image-capable OpenRouter model and returns raw image bytes.
+    Never blocks article completion — callers must catch OpenRouterError and skip."""
+    if not api_key:
+        raise OpenRouterError("OpenRouter API key is missing.")
+    if not model:
+        raise OpenRouterError("No image model was selected.")
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "modalities": ["image", "text"],
+    }
+    try:
+        resp = httpx.post(
+            f"{base_url}/chat/completions", headers=_headers(api_key), json=payload, timeout=timeout
+        )
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise OpenRouterError("Image generation request failed.") from exc
+
+    try:
+        data = resp.json()
+    except json.JSONDecodeError as exc:
+        raise OpenRouterError("Image model returned invalid content.") from exc
+
+    choices = data.get("choices") or []
+    if not choices:
+        raise OpenRouterError("Image model returned no content.")
+
+    message = choices[0].get("message", {})
+    for img in message.get("images") or []:
+        url = (img.get("image_url") or {}).get("url", "")
+        if url.startswith("data:image"):
+            _, b64data = url.split(",", 1)
+            return base64.b64decode(b64data)
+        if url:
+            try:
+                img_resp = httpx.get(url, timeout=timeout)
+                img_resp.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise OpenRouterError("Could not download the generated image.") from exc
+            return img_resp.content
+
+    raise OpenRouterError("Image model did not return an image.")
 
 
 def regenerate_article(api_key: str, model: str, original_article_prompt: str, evaluator_report: str) -> dict:

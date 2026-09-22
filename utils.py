@@ -51,6 +51,18 @@ def extract_section(markdown_text: str, header: str) -> str:
     return ""
 
 
+DATA_URI_RE = re.compile(r"data:[^\"')\s]+")
+
+
+def strip_embedded_media_for_llm(text: str) -> str:
+    """Replaces embedded base64 image/chart data URIs with a short placeholder before the
+    text is sent to any LLM (Evaluator, Revise, Regenerate). A real article can carry
+    megabytes of base64 image data — sending that as prompt text wastes enormous tokens
+    and can make the model return invalid/empty content. Python-side SEO checks and word
+    counts should also run on this stripped version so embedded media doesn't skew them."""
+    return DATA_URI_RE.sub("data:[embedded-media]", text)
+
+
 def enforce_assignment_fields(prompt_text: str, overrides: dict) -> str:
     """Force-overwrites deterministic ARTICLE ASSIGNMENT fields (topic, focus keyword,
     language, target market, word count) with the application's exact values. Models
@@ -74,3 +86,34 @@ def parse_metadata_field(section_text: str, field_name: str) -> str:
     pattern = rf"\*\*{re.escape(field_name)}:\*\*\s*(.+)"
     match = re.search(pattern, section_text)
     return match.group(1).strip() if match else ""
+
+
+def parse_plain_field(text: str, field_name: str) -> str:
+    """Extracts a plain 'Field Name: value' line's value (no bold markdown)."""
+    pattern = rf"^{re.escape(field_name)}:\s*(.+)$"
+    match = re.search(pattern, text, flags=re.MULTILINE)
+    return match.group(1).strip() if match else ""
+
+
+def parse_image_recommendations(image_section: str) -> dict:
+    """Parses the Writer's '# Image Recommendations' section into featured/in-article entries."""
+    result = {"featured": {}, "in_article": []}
+    blocks = re.split(r"^##\s+", image_section, flags=re.MULTILINE)
+    for block in blocks:
+        block = block.strip()
+        if not block:
+            continue
+        lines = block.splitlines()
+        heading = lines[0].strip().lower()
+        body = "\n".join(lines[1:])
+        fields = {
+            "Section": parse_plain_field(body, "Section"),
+            "Concept": parse_plain_field(body, "Concept"),
+            "Filename": parse_plain_field(body, "Filename"),
+            "Alt text": parse_plain_field(body, "Alt text"),
+        }
+        if "featured" in heading:
+            result["featured"] = fields
+        elif "in-article" in heading or "in article" in heading:
+            result["in_article"].append(fields)
+    return result

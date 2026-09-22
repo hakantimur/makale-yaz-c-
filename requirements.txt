@@ -1,3 +1,5 @@
 streamlit
 httpx
 python-dotenv
+matplotlib
+markdown

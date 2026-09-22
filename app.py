@@ -1,16 +1,53 @@
 import os
+import re
 
 import streamlit as st
 from dotenv import load_dotenv
 
 import openrouter
+from charts import render_charts_in_article
+from html_export import convert_article_to_html
+from media import image_bytes_to_data_uri, save_image_bytes
 from openrouter import OpenRouterError
 from seo_checks import run_python_seo_checks
-from utils import safe_filename, save_markdown
+from utils import extract_section, parse_image_recommendations, safe_filename, save_markdown
 
 load_dotenv()
 
 st.set_page_config(page_title="Noritales Blog Writer", layout="wide")
+
+# Preview-only defaults so the colored boxes/CTA/images/charts actually look colorful while
+# testing locally. The real published site's own CSS is what controls this in production.
+st.markdown(
+    """
+    <style>
+    .noritales-cta-button {
+        display: inline-block; background: #e8734a; color: white !important;
+        padding: 12px 24px; border-radius: 8px; font-weight: 600; text-decoration: none;
+        margin: 12px 0;
+    }
+    .noritales-cta-button:hover { background: #d15f38; }
+    .noritales-stat-card {
+        display: flex; align-items: baseline; gap: 12px; background: #fff4ec;
+        border-left: 5px solid #e8734a; border-radius: 8px; padding: 16px 20px; margin: 16px 0;
+    }
+    .noritales-stat-number { font-size: 2.2em; font-weight: 800; color: #e8734a; }
+    .noritales-stat-label { color: #6b4a3a; font-size: 1.05em; }
+    .noritales-quote-box {
+        background: #fdf6f0; border-left: 5px solid #f2b675; border-radius: 8px;
+        padding: 16px 20px; margin: 16px 0; font-style: italic; color: #5a4433;
+    }
+    .noritales-tip-box {
+        background: #eef7f0; border-left: 5px solid #6fae7f; border-radius: 8px;
+        padding: 16px 20px; margin: 16px 0; color: #2f5a3d;
+    }
+    .noritales-chart, .noritales-image { margin: 20px 0; text-align: center; }
+    .noritales-chart img, .noritales-image img { max-width: 100%; border-radius: 8px; }
+    .noritales-chart figcaption { font-size: 0.9em; color: #777; margin-top: 6px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 LANGUAGES = ["English", "Turkish", "German", "Spanish", "French", "Portuguese", "Arabic"]
 MAX_AUTO_REGENERATE = 2
@@ -30,6 +67,7 @@ def init_state():
         "regenerate_count": 0,
         "saved_path": None,
         "models": None,
+        "media_enriched": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -72,6 +110,70 @@ def show_usage(label: str, usage: dict, pricing: dict):
         f"output: {usage.get('completion_tokens', '?')} tok, "
         f"est. cost: ${cost}"
     )
+
+
+def enrich_article_with_media(article_markdown: str, api_key: str, image_model: str, slug: str) -> tuple:
+    """Generates 1-2 real images and renders any CHART RECOMMENDATION blocks into real
+    charts, embedding both inline. Never blocks article completion — a failed image or
+    chart is skipped with a warning, never an exception the caller has to handle."""
+    warnings = []
+    article_section = extract_section(article_markdown, "Article")
+    image_section = extract_section(article_markdown, "Image Recommendations")
+    images_info = parse_image_recommendations(image_section)
+
+    image_requests = []
+    if images_info["featured"].get("Concept"):
+        image_requests.append(("featured", images_info["featured"]))
+    if images_info["in_article"] and images_info["in_article"][0].get("Concept"):
+        image_requests.append(("in_article", images_info["in_article"][0]))
+    image_requests = image_requests[:2]
+
+    new_article_section = article_section
+    for kind, info in image_requests:
+        concept = info.get("Concept", "")
+        alt_text = info.get("Alt text") or concept
+        try:
+            image_prompt = (
+                f"Warm, friendly flat-illustration style image for a parenting/child-development "
+                f"blog article. {concept}. No text or letters anywhere in the image."
+            )
+            try:
+                image_bytes = openrouter.generate_image(api_key, image_model, image_prompt)
+            except OpenRouterError:
+                # Image generation can be transiently flaky — one retry before giving up,
+                # never blocking the article either way.
+                image_bytes = openrouter.generate_image(api_key, image_model, image_prompt)
+            filename = f"{kind}.png"
+            save_image_bytes(image_bytes, slug, filename)  # local backup copy
+            data_uri = image_bytes_to_data_uri(image_bytes, "image/png")
+            image_html = f'\n\n<figure class="noritales-image"><img src="{data_uri}" alt="{alt_text}"></figure>\n\n'
+
+            if kind == "featured":
+                new_article_section, count = re.subn(
+                    r"^#\s+.+$",
+                    lambda m: m.group(0) + image_html,
+                    new_article_section,
+                    count=1,
+                    flags=re.MULTILINE,
+                )
+                if count == 0:
+                    new_article_section = image_html + new_article_section
+            else:
+                section_name = info.get("Section", "")
+                if section_name and section_name in new_article_section:
+                    new_article_section = new_article_section.replace(section_name, section_name + image_html, 1)
+                else:
+                    new_article_section += image_html
+        except OpenRouterError as exc:
+            warnings.append(f"Görsel oluşturulamadı ({kind}): {exc}")
+        except Exception as exc:  # noqa: BLE001 - image generation must never block the article
+            warnings.append(f"Görsel oluşturulurken beklenmeyen hata ({kind}): {exc}")
+
+    new_article_section, chart_warnings = render_charts_in_article(new_article_section, slug)
+    warnings.extend(chart_warnings)
+
+    new_full_markdown = article_markdown.replace(article_section, new_article_section, 1)
+    return new_full_markdown, warnings
 
 
 def parse_evaluator_output(text: str) -> dict:
@@ -128,23 +230,19 @@ with col2:
     target_market = st.text_input("Target Market (optional)")
 
 st.subheader("Models (one per request — each request is independent)")
-mcol1, mcol2, mcol3, mcol4 = st.columns(4)
-with mcol1:
-    research_model = st.selectbox(
-        "Research Model", model_options, format_func=lambda x: model_labels.get(x, x), key="research_model"
-    ) if model_options else st.text_input("Research Model (id)", key="research_model_manual")
-with mcol2:
-    prompt_builder_model = st.selectbox(
-        "Article Prompt Builder Model", model_options, format_func=lambda x: model_labels.get(x, x), key="builder_model"
-    ) if model_options else st.text_input("Article Prompt Builder Model (id)", key="builder_model_manual")
-with mcol3:
-    writer_model = st.selectbox(
-        "Writer Model", model_options, format_func=lambda x: model_labels.get(x, x), key="writer_model"
-    ) if model_options else st.text_input("Writer Model (id)", key="writer_model_manual")
-with mcol4:
-    evaluator_model = st.selectbox(
-        "Evaluator Model", model_options, format_func=lambda x: model_labels.get(x, x), key="evaluator_model"
-    ) if model_options else st.text_input("Evaluator Model (id)", key="evaluator_model_manual")
+
+
+def model_select(label: str, key: str):
+    if model_options:
+        return st.selectbox(label, model_options, format_func=lambda x: model_labels.get(x, x), key=key)
+    return st.text_input(f"{label} (id)", key=f"{key}_manual")
+
+
+research_model = model_select("Research Model", "research_model")
+prompt_builder_model = model_select("Article Prompt Builder Model", "builder_model")
+writer_model = model_select("Writer Model", "writer_model")
+evaluator_model = model_select("Evaluator Model", "evaluator_model")
+image_model = model_select("Image Model", "image_model")
 
 can_run = bool(api_key)
 
@@ -212,6 +310,7 @@ if st.session_state["article_prompt"]:
             st.session_state["seo_report"] = None
             st.session_state["evaluator_text"] = None
             st.session_state["regenerate_count"] = 0
+            st.session_state["media_enriched"] = False
         except OpenRouterError as exc:
             st.error(str(exc))
 
@@ -219,7 +318,29 @@ if st.session_state["article_markdown"]:
     st.header("4. Article")
     show_usage("Writer", st.session_state["article_usage"], get_model_pricing(models, writer_model))
     with st.expander("View Article", expanded=True):
-        st.markdown(st.session_state["article_markdown"])
+        st.markdown(st.session_state["article_markdown"], unsafe_allow_html=True)
+
+    if not st.session_state["media_enriched"]:
+        st.caption(
+            "Metni beğendikten sonra (revize/regenerate'den geçtikten sonra) görsel ve grafik "
+            "eklemek maliyet açısından daha verimlidir — ama istediğin an ekleyebilirsin."
+        )
+        if st.button("🎨 GÖRSEL VE GRAFİK EKLE", disabled=not can_run):
+            try:
+                with st.spinner("Görseller ve grafikler oluşturuluyor..."):
+                    enriched, enrich_warnings = enrich_article_with_media(
+                        st.session_state["article_markdown"], api_key, image_model,
+                        safe_filename(focus_keyword or topic),
+                    )
+                st.session_state["article_markdown"] = enriched
+                st.session_state["media_enriched"] = True
+                for w in enrich_warnings:
+                    st.warning(w)
+                st.rerun()
+            except Exception as exc:  # noqa: BLE001 - enrichment must never crash the app
+                st.warning(f"Görsel/grafik ekleme sırasında hata oluştu, makale metni etkilenmedi: {exc}")
+    else:
+        st.caption("✅ Görsel ve grafikler eklendi.")
 
     if st.button("RUN SEO + LLM AUDIT", disabled=not can_run):
         try:
@@ -270,6 +391,7 @@ if st.session_state["seo_report"]:
                     st.session_state["article_markdown"] = result["content"]
                     st.session_state["seo_report"] = None
                     st.session_state["evaluator_text"] = None
+                    st.session_state["media_enriched"] = False
                     st.rerun()
                 except OpenRouterError as exc:
                     st.error(str(exc))
@@ -285,6 +407,7 @@ if st.session_state["seo_report"]:
                     st.session_state["article_markdown"] = result["content"]
                     st.session_state["seo_report"] = None
                     st.session_state["evaluator_text"] = None
+                    st.session_state["media_enriched"] = False
                     st.session_state["regenerate_count"] += 1
                     st.rerun()
                 except OpenRouterError as exc:
@@ -305,4 +428,21 @@ if st.session_state["seo_report"]:
             data=st.session_state["article_markdown"],
             file_name=f"{safe_filename(focus_keyword or topic)}.md",
             mime="text/markdown",
+        )
+
+        st.subheader("Wagtail için HTML")
+        st.caption(
+            "Markdown'ı (tablo, başlık, kalın yazı dahil) doğrudan Wagtail'in RawHTMLBlock'una "
+            "yapıştırılabilecek gerçek HTML'e çevirir — düz RichText alanına değil, RawHTMLBlock'a "
+            "yapıştır, aksi halde CTA/kutu/grafik stilleri kaybolur."
+        )
+        article_only = extract_section(st.session_state["article_markdown"], "Article")
+        article_html = convert_article_to_html(article_only)
+        with st.expander("Kopyala: HTML çıktısı", expanded=False):
+            st.code(article_html, language="html")
+        st.download_button(
+            "Download HTML",
+            data=article_html,
+            file_name=f"{safe_filename(focus_keyword or topic)}.html",
+            mime="text/html",
         )

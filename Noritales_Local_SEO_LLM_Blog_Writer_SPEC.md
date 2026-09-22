@@ -1920,6 +1920,26 @@ Ayrıca URL regex'inde bir bug bulunup düzeltildi: `<a href="...">` gibi HTML �
 
 ---
 
+# 69c. Görsel Zenginleştirme (Renkli Kutular, Gerçek Görsel, Gerçek Grafik, Wagtail HTML Export)
+
+Kullanıcı geri bildirimi: makaleler "akademik ve sıkıcı" görünüyordu — renk, görsel, grafik yoktu. Buna karşı eklenenler:
+
+**Renkli kutular** — `WRITER_SYSTEM_PROMPT`'a CTA butonuyla aynı yöntemle 3 yeni sabit class eklendi: `noritales-stat-card` (istatistik vurgusu), `noritales-quote-box` (alıntı/içgörü), `noritales-tip-box` (ebeveyn ipucu). Writer bunları makale gövdesine, ilgili paragrafın yanına gömer.
+
+**Gerçek AI görselleri** — Yeni bir 5. model seçici: **Image Model**. `openrouter.generate_image()` OpenRouter'ın görsel üretebilen modellerini (`architecture.output_modalities` içinde "image" olanlar, örn. `google/gemini-2.5-flash-image`) çağırır ve base64 PNG döner. Makale başına 1-2 görsel (Featured + varsa ilk In-Article) üretilir. **Görsel üretimi başarısız olursa makale durmaz** — hata yakalanır, kullanıcıya uyarı gösterilir, o görsel atlanır (1 otomatik retry dahil).
+
+**Gerçek grafikler** — [charts.py](charts.py), Writer'ın ürettiği "CHART RECOMMENDATION" metin bloklarını regex ile ayrıştırır, `matplotlib` ile gerçek bir SVG grafiğe çevirir. Sayısal veri ayrıştırılamazsa (best-effort) o grafik atlanır, makale durmaz.
+
+**Görsel/grafik ne zaman üretiliyor — mimari karar:** Zenginleştirme, Writer'dan hemen sonra DEĞİL, ayrı bir **"🎨 GÖRSEL VE GRAFİK EKLE"** butonuyla, kullanıcı metni beğendikten sonra tetiklenir. Sebep: (1) maliyet — her revise/regenerate döngüsünde görsel yeniden üretmek israf olurdu; (2) teknik zorunluluk — görseller base64 olarak gömülüyor ve bu veri megabaytlarca büyüyebiliyor; bunu Evaluator/Revise/Regenerate çağrılarına olduğu gibi göndermek modelin "invalid content" hatası vermesine yol açtı (gerçek testte tespit edildi).
+
+**Base64 temizleme (kritik düzeltme):** [utils.py](utils.py)'deki `strip_embedded_media_for_llm()`, herhangi bir LLM çağrısından (Evaluator, Revise, Regenerate) ve Python SEO kontrollerinden ÖNCE `data:...` base64 bloklarını kısa bir placeholder ile değiştirir. Bu olmadan: (a) Evaluator context'i patlar/boş dönerdi, (b) word count gibi metrikler base64 gürültüsüyle bozulurdu. Bu güvenlik önlemi, kullanıcı zenginleştirmeyi ne zaman tetiklerse tetiklesin (QA'dan önce de sonra da) sistemi korur.
+
+**Görseller nerede saklanıyor:** Base64 data URI olarak doğrudan makale HTML/Markdown'ına gömülür (taşınabilir, ayrı hosting gerekmez); ayrıca yedek kopya `outputs/images/<slug>/` altına PNG/SVG olarak kaydedilir.
+
+**Wagtail HTML Export** — Kullanıcı kendi sitesinde Wagtail (Django CMS) kullanıyor. Wagtail'in varsayılan `RichTextField`'ı (Draftail editörü) özel HTML/CSS'i (class'lar, custom tag'ler) güvenlik amacıyla temizler — bu yüzden ham Markdown'ı (tablo dahil) doğrudan yapıştırmak "tabloların bozulması" sorununa yol açtı. Çözüm: [html_export.py](html_export.py), `python-markdown` kütüphanesiyle (tables/fenced_code/nl2br extensionları) makale gövdesini gerçek HTML'e çevirir — `<table>`, `<h1>`, `<strong>` gibi gerçek etiketler üretir, Writer'ın zaten gömdüğü ham HTML (CTA, kutular, görseller) olduğu gibi korunur. Kullanıcı bu HTML'i Wagtail'in **RawHTMLBlock**'una yapıştırmalı, düz RichText alanına değil.
+
+---
+
 # 70. Projenin Ana Kuralı
 
 Bu uygulamanın amacı:

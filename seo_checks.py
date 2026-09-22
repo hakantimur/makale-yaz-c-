@@ -3,7 +3,7 @@ import re
 import httpx
 
 from config import NORITALES_HOMEPAGE_URL
-from utils import extract_section, parse_metadata_field, slugify_focus_keyword
+from utils import extract_section, parse_metadata_field, slugify_focus_keyword, strip_embedded_media_for_llm
 
 SENTENCE_SPLIT_RE = re.compile(r"[.!?]+(?:\s+|$)")
 URL_RE = re.compile(r"https?://[^\s)>\]\"'<]+")
@@ -196,6 +196,7 @@ def has_inline_statistic(article_section: str) -> bool:
 
 def run_python_seo_checks(full_markdown: str, focus_keyword: str, target_word_count: int) -> dict:
     """Deterministic checks per SPEC section 47-49. Runs on the Writer's full markdown output."""
+    full_markdown = strip_embedded_media_for_llm(full_markdown)
     metadata_section = extract_section(full_markdown, "SEO Metadata")
     article_section = extract_section(full_markdown, "Article")
     internal_links_section = extract_section(full_markdown, "Internal Links")
