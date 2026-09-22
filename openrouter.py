@@ -44,6 +44,20 @@ def get_models(api_key: str, base_url: str = DEFAULT_BASE_URL) -> list:
     return resp.json().get("data", [])
 
 
+def get_image_models(api_key: str, base_url: str = DEFAULT_BASE_URL) -> list:
+    """Dedicated image-generation models (e.g. GPT Image 2.5 Flare, Nano Banana) live in a
+    separate catalog from the chat-completions '/models' list — many of them have no text
+    output at all and 404 on /chat/completions, so they never appear there."""
+    if not api_key:
+        raise OpenRouterError("OpenRouter API key is missing.")
+    try:
+        resp = httpx.get(f"{base_url}/images/models", headers=_headers(api_key), timeout=15)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise OpenRouterError("Could not fetch the image model list from OpenRouter.") from exc
+    return resp.json().get("data", [])
+
+
 def call_model(
     api_key: str,
     model: str,
@@ -201,21 +215,20 @@ def generate_image(
     base_url: str = DEFAULT_BASE_URL,
     timeout: float = 120.0,
 ) -> bytes:
-    """Calls an image-capable OpenRouter model and returns raw image bytes.
+    """Calls OpenRouter's dedicated images endpoint and returns raw image bytes. Many
+    image models (e.g. GPT Image 2.5 Flare) have no text output and 404 on
+    /chat/completions — /images/generations is the correct endpoint for all image
+    models, both pure-image and hybrid ones like Nano Banana.
     Never blocks article completion — callers must catch OpenRouterError and skip."""
     if not api_key:
         raise OpenRouterError("OpenRouter API key is missing.")
     if not model:
         raise OpenRouterError("No image model was selected.")
 
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "modalities": ["image", "text"],
-    }
+    payload = {"model": model, "prompt": prompt}
     try:
         resp = httpx.post(
-            f"{base_url}/chat/completions", headers=_headers(api_key), json=payload, timeout=timeout
+            f"{base_url}/images/generations", headers=_headers(api_key), json=payload, timeout=timeout
         )
         resp.raise_for_status()
     except httpx.HTTPError as exc:
@@ -226,18 +239,18 @@ def generate_image(
     except json.JSONDecodeError as exc:
         raise OpenRouterError("Image model returned invalid content.") from exc
 
-    choices = data.get("choices") or []
-    if not choices:
+    items = data.get("data") or []
+    if not items:
         raise OpenRouterError("Image model returned no content.")
 
-    message = choices[0].get("message", {})
-    for img in message.get("images") or []:
-        url = (img.get("image_url") or {}).get("url", "")
-        if url.startswith("data:image"):
-            _, b64data = url.split(",", 1)
-            return base64.b64decode(b64data)
-        if url:
-            return _fetch_remote_image_safely(url, timeout)
+    item = items[0]
+    b64data = item.get("b64_json")
+    if b64data:
+        return base64.b64decode(b64data)
+
+    url = item.get("url", "")
+    if url:
+        return _fetch_remote_image_safely(url, timeout)
 
     raise OpenRouterError("Image model did not return an image.")
 

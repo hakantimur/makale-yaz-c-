@@ -68,6 +68,7 @@ def init_state():
         "regenerate_count": 0,
         "saved_path": None,
         "models": None,
+        "image_models": None,
         "media_enriched": False,
     }
     for key, value in defaults.items():
@@ -213,7 +214,13 @@ with st.sidebar:
     if st.button("Load / Refresh Model List"):
         try:
             st.session_state["models"] = openrouter.get_models(api_key)
-            st.success(f"{len(st.session_state['models'])} models loaded.")
+            # Dedicated image-generation models (GPT Image, Nano Banana, ...) live in a
+            # separate OpenRouter catalog and never appear in the chat-completions list above.
+            st.session_state["image_models"] = openrouter.get_image_models(api_key)
+            st.success(
+                f"{len(st.session_state['models'])} models loaded "
+                f"({len(st.session_state['image_models'])} image models)."
+            )
         except OpenRouterError as exc:
             st.error(str(exc))
 
@@ -223,6 +230,10 @@ with st.sidebar:
 models = st.session_state["models"] or []
 model_options = [m.get("id") for m in models] if models else []
 model_labels = {m.get("id"): format_model_label(m) for m in models}
+
+image_models = st.session_state["image_models"] or []
+image_model_options = [m.get("id") for m in image_models] if image_models else []
+image_model_labels = {m.get("id"): format_model_label(m) for m in image_models}
 
 st.header("1. Assignment")
 col1, col2 = st.columns(2)
@@ -237,9 +248,11 @@ with col2:
 st.subheader("Models (one per request — each request is independent)")
 
 
-def model_select(label: str, key: str):
-    if model_options:
-        return st.selectbox(label, model_options, format_func=lambda x: model_labels.get(x, x), key=key)
+def model_select(label: str, key: str, options: list = None, labels: dict = None):
+    options = options if options is not None else model_options
+    labels = labels if labels is not None else model_labels
+    if options:
+        return st.selectbox(label, options, format_func=lambda x: labels.get(x, x), key=key)
     return st.text_input(f"{label} (id)", key=f"{key}_manual")
 
 
@@ -247,7 +260,7 @@ research_model = model_select("Research Model", "research_model")
 prompt_builder_model = model_select("Article Prompt Builder Model", "builder_model")
 writer_model = model_select("Writer Model", "writer_model")
 evaluator_model = model_select("Evaluator Model", "evaluator_model")
-image_model = model_select("Image Model", "image_model")
+image_model = model_select("Image Model", "image_model", image_model_options, image_model_labels)
 
 can_run = bool(api_key)
 
